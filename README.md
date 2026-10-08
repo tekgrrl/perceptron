@@ -1,5 +1,5 @@
 # Perceptron Bench
-**[Try the simulator →](https://tekgrrl.github.io/perceptron/perceptron.html)**
+**[Try the simulator →](https://tekgrrl.github.io/perceptron/)**
 
 A 16-input perceptron built from analog parts: toggle switches for the pixels, potentiometers for the
 weights, and a center-zero microammeter as the output. No chips and no code. This repo has a browser
