@@ -244,6 +244,9 @@
       <label class="row">Knob step per correction
         <select id="step"><option>1</option><option>2</option><option selected>3</option><option>5</option></select>
       </label>
+      <label class="row">Minimum needle swing
+        <select id="margin"><option value="0">Any (just the right side)</option><option value="5">5 µA</option><option value="10" selected>10 µA</option><option value="15">15 µA</option><option value="20">20 µA</option></select>
+      </label>
       <label class="row">Example set
         <select id="preset">
           <option value="diag">Diagonals: \ vs /</option>
@@ -252,7 +255,7 @@
         </select>
       </label>
       <div class="msg" id="msg"></div>
-      <p class="note">The learning rule is the one you'd follow by hand. If the needle points the wrong way, turn the knob of every switched-on input, plus the bias, one step toward the correct side.</p>
+      <p class="note">The learning rule is the one you'd follow by hand. If the needle points the wrong way, turn the knob of every switched-on input, plus the bias, one step toward the correct side. Training keeps going until each example swings the needle past the minimum on its correct side. Choosing a new example set resets the knobs to 0.</p>
     </section>
 
     <section class="card">
@@ -305,7 +308,9 @@
     const I = P.Rm > 0 ? Vn / P.Rm : br.reduce((s, b) => s + b.I, 0);
     return { Vn, I, br };
   }
-  const predict = () => physics().I > 0 ? 1 : -1;
+  // An example counts as learned only if the needle swings past the minimum on the correct side.
+  // A reading of exactly 0 µA never counts.
+  const meets = label => physics().I * 1e6 * label > +$("margin").value;
 
   // ---------- build the board ----------
   document.querySelectorAll(".panel").forEach(p => {
@@ -471,6 +476,7 @@
     none: [],
   };
   function loadPreset(key) {
+    w.fill(0);
     examples = PRESETS[key].map(([s, label]) => ({ x: pat(s), label }));
     $("msg").textContent = key === "vh"
       ? "Try it: no setting of the knobs separates these. Every pixel is in exactly one vertical bar and one horizontal bar, so both groups add up the same weights."
@@ -480,13 +486,13 @@
 
   function stepOn(ex) {
     for (let i = 0; i < N; i++) x[i] = ex.x[i];
-    if (predict() === ex.label) return false;
+    if (meets(ex.label)) return false;
     const d = +$("step").value * ex.label;
     for (let i = 0; i < N; i++) if (x[i]) w[i] = clamp(w[i] + d);
     w[BIAS] = clamp(w[BIAS] + d);
     return true;
   }
-  const mistakes = () => examples.filter(ex => { const save = x.slice(); ex.x.forEach((v, i) => x[i] = v); const wrong = predict() !== ex.label; save.forEach((v, i) => x[i] = v); return wrong; }).length;
+  const mistakes = () => examples.filter(ex => { const save = x.slice(); ex.x.forEach((v, i) => x[i] = v); const wrong = !meets(ex.label); save.forEach((v, i) => x[i] = v); return wrong; }).length;
 
   let runToken = 0;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -503,9 +509,9 @@
         await sleep(delay);
       }
       const wrong = mistakes();
-      $("msg").textContent = `Epoch ${e}: made ${fixes} correction${fixes === 1 ? "" : "s"}, now ${wrong} of ${examples.length} wrong.`;
-      if (wrong === 0) { $("msg").textContent += " All examples correct."; break; }
-      if (e === maxEpochs && maxEpochs > 1) $("msg").textContent += " Gave up. This set may not be linearly separable.";
+      $("msg").textContent = `Epoch ${e}: made ${fixes} correction${fixes === 1 ? "" : "s"}, now ${wrong} of ${examples.length} still short.`;
+      if (wrong === 0) { $("msg").textContent += " Every example now swings the needle far enough."; break; }
+      if (e === maxEpochs && maxEpochs > 1) $("msg").textContent += " Gave up. Either this set isn't linearly separable, or the minimum swing is too big for the knobs' ±30 range.";
     }
     if (token === runToken) { runToken++; $("auto").textContent = "Train until correct"; }
   }
@@ -519,6 +525,7 @@
   $("zeroW").addEventListener("click", () => { w.fill(0); update(); });
   $("clearX").addEventListener("click", () => { x.fill(false); update(); });
   $("preset").addEventListener("change", e => loadPreset(e.target.value));
+  $("margin").addEventListener("change", update);
 
   function renderGallery() {
     const g = $("gallery");
@@ -530,7 +537,7 @@
     const save = x.slice();
     examples.forEach((ex, k) => {
       ex.x.forEach((v, i) => x[i] = v);
-      const ok = predict() === ex.label;
+      const ok = meets(ex.label);
       const b = document.createElement("div");
       b.className = "ex " + (ok ? "right" : "wrong");
       b.tabIndex = 0; b.setAttribute("role", "button");
