@@ -134,6 +134,6 @@ Print or engrave a dial scale from −30 to +30 for each pot. The simulator's kn
    (e.g. 3 units) toward the correct side.
 4. Go through all your examples over and over until every one comes out right.
 
-The simulator's "Train 1 epoch" button does exactly this, so you can practise before building.
+The simulator's "Train 1 pass" button does exactly this, so you can practise before building.
 It also includes an example set (vertical vs horizontal bars) that **no setting of the knobs can learn**.
 That's the classic limit of a single perceptron: it can only learn what one straight cut can separate.

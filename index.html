@@ -118,6 +118,18 @@
   .knob-cap { transition: transform .05s linear; }
   .knob-cell .cap-label { font-size: 10px; color: #8d877e; font-variant-numeric: tabular-nums; margin-top: -2px; }
   .knob-cell.active .cap-label { color: var(--accent); }
+  .knob-wrap { position: relative; }
+  .knob-wrap:hover, .knob-wrap:has(:focus-visible) { z-index: 2; }
+  .nudge {
+    position: absolute; top: 50%; width: 24px; height: 24px; margin-top: -12px; padding: 0;
+    border-radius: 50%; border: 1px solid #a77a36; background: #2a2119; color: var(--accent);
+    font-family: inherit; font-size: 15px; font-weight: 700; line-height: 1; cursor: pointer; z-index: 1;
+    opacity: 0; pointer-events: none; transition: opacity .12s;
+  }
+  .nudge.dec { left: -10px; } .nudge.inc { right: -10px; }
+  .nudge:hover { background: #6b4b1f; color: #fff; }
+  .knob-wrap:hover .nudge, .knob-wrap:has(:focus-visible) .nudge { opacity: 1; pointer-events: auto; }
+  @media (hover: none) { .nudge { opacity: .85; pointer-events: auto; } }
 
   /* resistors + meter */
   .right-col { display: flex; flex-direction: column; gap: 18px; align-items: center; }
@@ -150,6 +162,8 @@
     border: 1px solid rgba(232,194,122,.18);
     border-radius: 8px; padding: 16px;
   }
+  .card h3.sub { margin: 14px 0 6px; font-size: .7rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .card h2 + h3.sub { margin-top: 0; }
   .card h2 { margin: 0 0 12px; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
   .big { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
   .verdict { font-size: 1rem; margin: 4px 0 12px; }
@@ -191,7 +205,7 @@
 <main>
   <header>
     <h1>Perceptron Bench</h1>
-    <p>Click switches to set the inputs. Drag or scroll the knobs to set the weights (arrow keys work too, double-click resets to 0). The meter shows the summed current.</p>
+    <p>Click switches to set the inputs. Drag or scroll the knobs to set the weights, or hover over a knob and use its − / + buttons (they move it by the Step size) (arrow keys work too, double-click resets to 0). The meter shows the summed current.</p>
   </header>
 
   <div class="board">
@@ -229,24 +243,11 @@
 
     <section class="card">
       <h2>Teach it</h2>
+      <h3 class="sub">Examples</h3>
       <div class="btns">
         <button class="b" id="addPos">Add pattern as +</button>
         <button class="b" id="addNeg">Add pattern as −</button>
       </div>
-      <div class="btns">
-        <button class="b" id="epoch">Train 1 epoch</button>
-        <button class="b primary" id="auto">Train until correct</button>
-      </div>
-      <div class="btns">
-        <button class="b" id="zeroW">Zero knobs</button>
-        <button class="b" id="clearX">Clear switches</button>
-      </div>
-      <label class="row">Knob step per correction
-        <select id="step"><option>1</option><option>2</option><option selected>3</option><option>5</option></select>
-      </label>
-      <label class="row">Minimum needle swing
-        <select id="margin"><option value="0">Any (just the right side)</option><option value="5">5 µA</option><option value="10" selected>10 µA</option><option value="15">15 µA</option><option value="20">20 µA</option></select>
-      </label>
       <label class="row">Example set
         <select id="preset">
           <option value="diag">Diagonals: \ vs /</option>
@@ -254,8 +255,24 @@
           <option value="none">Empty (draw your own)</option>
         </select>
       </label>
+      <h3 class="sub">Trainer</h3>
+      <label class="row">Step size (also the knob − / + buttons)
+        <select id="step"><option>1</option><option>2</option><option>3</option><option selected>5</option><option>10</option></select>
+      </label>
+      <label class="row">Minimum needle swing
+        <select id="margin"><option value="auto" selected>Auto</option><option value="0">Any (just the right side)</option><option value="5">5 µA</option><option value="10">10 µA</option><option value="15">15 µA</option><option value="20">20 µA</option><option value="30">30 µA</option></select>
+      </label>
+      <div class="btns">
+        <button class="b" id="epoch">Train 1 pass</button>
+        <button class="b primary" id="auto">Train until correct</button>
+      </div>
       <div class="msg" id="msg"></div>
-      <p class="note">The learning rule is the one you'd follow by hand. If the needle points the wrong way, turn the knob of every switched-on input, plus the bias, one step toward the correct side. Training keeps going until each example swings the needle past the minimum on its correct side. Choosing a new example set resets the knobs to 0.</p>
+      <h3 class="sub">Reset</h3>
+      <div class="btns">
+        <button class="b" id="zeroW">Zero knobs</button>
+        <button class="b" id="clearX">Clear switches</button>
+      </div>
+      <p class="note">The learning rule is the one you'd follow by hand. If the needle points the wrong way, turn the knob of every switched-on input, plus the bias, one step toward the correct side. Training keeps going until each example swings the needle past the minimum on its correct side. On Auto the minimum is 2 × the step size, so a bigger step aims for a bigger swing. Choosing a new example set resets the knobs to 0.</p>
     </section>
 
     <section class="card">
@@ -310,7 +327,8 @@
   }
   // An example counts as learned only if the needle swings past the minimum on the correct side.
   // A reading of exactly 0 µA never counts.
-  const meets = label => physics().I * 1e6 * label > +$("margin").value;
+  const minSwing = () => $("margin").value === "auto" ? 2 * +$("step").value : +$("margin").value;
+  const meets = label => physics().I * 1e6 * label > minSwing();
 
   // ---------- build the board ----------
   document.querySelectorAll(".panel").forEach(p => {
@@ -358,10 +376,20 @@
     k.setAttribute("aria-valuemin", -WMAX); k.setAttribute("aria-valuemax", WMAX);
     k.innerHTML = knobSVG();
     const lab = document.createElement("div"); lab.className = "cap-label";
-    cell.append(k, lab); $("knobs").append(cell);
+    const setW = v => { w[i] = clamp(Math.round(v)); update(); };
+    const nudge = (sign, cls, text) => {
+      const b = document.createElement("button");
+      b.className = "nudge " + cls; b.textContent = text;
+      b.setAttribute("aria-label", `${sign > 0 ? "Increase" : "Decrease"} ${i === BIAS ? "bias" : `weight ${i + 1}`} by one step`);
+      b.addEventListener("click", () => setW(w[i] + sign * +$("step").value));
+      b.addEventListener("focus", () => hoverIdx = i);
+      return b;
+    };
+    const wrap = document.createElement("div"); wrap.className = "knob-wrap";
+    wrap.append(nudge(-1, "dec", "−"), k, nudge(1, "inc", "+"));
+    cell.append(wrap, lab); $("knobs").append(cell);
     knobs.push(k); caps.push(k.querySelector(".knob-cap")); capLabels.push(lab); cells.push(cell);
 
-    const setW = v => { w[i] = clamp(Math.round(v)); update(); };
     let drag = null;
     k.addEventListener("pointerdown", e => { k.setPointerCapture(e.pointerId); drag = { y: e.clientY, w: w[i] }; k.focus(); });
     k.addEventListener("pointermove", e => { if (drag) setW(drag.w + (drag.y - e.clientY) / 4); });
@@ -475,8 +503,10 @@
     ],
     none: [],
   };
+  // Running pass count, so repeated "Train 1 pass" clicks count up. Restarts when the knobs or examples are reset.
+  let passes = 0;
   function loadPreset(key) {
-    w.fill(0);
+    w.fill(0); passes = 0;
     examples = PRESETS[key].map(([s, label]) => ({ x: pat(s), label }));
     $("msg").textContent = key === "vh"
       ? "Try it: no setting of the knobs separates these. Every pixel is in exactly one vertical bar and one horizontal bar, so both groups add up the same weights."
@@ -502,6 +532,7 @@
     $("auto").textContent = "Stop";
     for (let e = 1; e <= maxEpochs; e++) {
       let fixes = 0;
+      passes++;
       for (const ex of examples) {
         if (token !== runToken) return;
         if (stepOn(ex)) fixes++;
@@ -509,9 +540,12 @@
         await sleep(delay);
       }
       const wrong = mistakes();
-      $("msg").textContent = `Epoch ${e}: made ${fixes} correction${fixes === 1 ? "" : "s"}, now ${wrong} of ${examples.length} still short.`;
-      if (wrong === 0) { $("msg").textContent += " Every example now swings the needle far enough."; break; }
-      if (e === maxEpochs && maxEpochs > 1) $("msg").textContent += " Gave up. Either this set isn't linearly separable, or the minimum swing is too big for the knobs' ±30 range.";
+      const n = examples.length, m = minSwing();
+      const target = m > 0 ? `clear the ${m} µA minimum` : "point the right way";
+      const did = fixes ? `corrected ${fixes} example${fixes === 1 ? "" : "s"}` : "nothing to correct";
+      if (wrong === 0) { $("msg").textContent = `Pass ${passes}: ${did}. All ${n} ${fixes ? "now" : "already"} ${target}. Done.`; break; }
+      $("msg").textContent = `Pass ${passes}: ${did}. ${wrong} of ${n} still ${wrong === 1 ? "doesn't" : "don't"} ${target}.`;
+      if (e === maxEpochs && maxEpochs > 1) $("msg").textContent += ` Gave up after ${e} passes. Either this set isn't linearly separable, or the minimum swing is too big for the knobs' ±30 range.`;
     }
     if (token === runToken) { runToken++; $("auto").textContent = "Train until correct"; }
   }
@@ -520,12 +554,15 @@
     if ($("auto").textContent === "Stop") { runToken++; $("auto").textContent = "Train until correct"; return; }
     runEpochs(40, 140);
   });
-  $("addPos").addEventListener("click", () => { examples.push({ x: x.slice(), label: 1 }); update(); });
-  $("addNeg").addEventListener("click", () => { examples.push({ x: x.slice(), label: -1 }); update(); });
-  $("zeroW").addEventListener("click", () => { w.fill(0); update(); });
+  $("addPos").addEventListener("click", () => { examples.push({ x: x.slice(), label: 1 }); passes = 0; update(); });
+  $("addNeg").addEventListener("click", () => { examples.push({ x: x.slice(), label: -1 }); passes = 0; update(); });
+  $("zeroW").addEventListener("click", () => { w.fill(0); passes = 0; update(); });
   $("clearX").addEventListener("click", () => { x.fill(false); update(); });
   $("preset").addEventListener("change", e => loadPreset(e.target.value));
+  const showAuto = () => { $("margin").options[0].textContent = `Auto: 2 × step = ${2 * +$("step").value} µA`; };
   $("margin").addEventListener("change", update);
+  $("step").addEventListener("change", () => { showAuto(); update(); });
+  showAuto();
 
   function renderGallery() {
     const g = $("gallery");
@@ -546,7 +583,7 @@
         + `<span class="lab" style="color:${ex.label > 0 ? "var(--good)" : "var(--bad)"}">${ex.label > 0 ? "+" : "−"} ${ok ? "✓" : "✗"}</span>`;
       const del = document.createElement("button");
       del.className = "x"; del.textContent = "×"; del.setAttribute("aria-label", "Remove example");
-      del.addEventListener("click", e => { e.stopPropagation(); examples.splice(k, 1); update(); });
+      del.addEventListener("click", e => { e.stopPropagation(); examples.splice(k, 1); passes = 0; update(); });
       b.append(del);
       const load = () => { ex.x.forEach((v, i) => x[i] = v); update(); };
       b.addEventListener("click", load);
