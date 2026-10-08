@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Perceptron Bench</title>
+<style>
+  :root {
+    --wood: #3b2416;
+    --board-hi: #e4ded2;
+    --board-lo: #cdc6b8;
+    --panel: #121212;
+    --ink: #f4f1ea;
+    --muted: #b4aa9c;
+    --accent: #e8c27a;
+    --good: #7fd18b;
+    --bad: #ff7a6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background:
+      repeating-linear-gradient(92deg, rgba(0,0,0,.08) 0 3px, transparent 3px 11px),
+      repeating-linear-gradient(90deg, #3a2314 0 7px, #452a19 7px 15px, #3d2516 15px 24px);
+    background-color: var(--wood);
+  }
+  main { max-width: 1320px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
+  h1 { margin: 0; font-size: 1.05rem; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  header p { margin: 0; color: var(--muted); font-size: .9rem; }
+
+  /* ---------- the plywood board ---------- */
+  .board {
+    background: linear-gradient(var(--board-hi), var(--board-lo));
+    border-radius: 6px;
+    padding: 28px 24px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.6);
+    display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: center;
+  }
+  .panel {
+    position: relative;
+    background: var(--panel);
+    border-radius: 4px;
+    padding: 30px;
+    box-shadow: 0 8px 16px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .bolt {
+    position: absolute; width: 16px; height: 16px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #fff, #aaa 40%, #555 75%);
+    box-shadow: 0 1px 2px rgba(0,0,0,.6);
+  }
+  .bolt:nth-child(1) { left: 6px; top: 6px; }  .bolt:nth-child(2) { right: 6px; top: 6px; }
+  .bolt:nth-child(3) { left: 6px; bottom: 6px; } .bolt:nth-child(4) { right: 6px; bottom: 6px; }
+
+  .left-col { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+
+  /* batteries */
+  .batteries { display: flex; flex-direction: column; gap: 4px; }
+  .cell {
+    width: 132px; height: 26px; border-radius: 4px; position: relative;
+    background: linear-gradient(#2a2a2a, #0c0c0c 60%, #222);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; letter-spacing: .08em; color: #ddd;
+  }
+  .cell::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 34px; border-radius: 4px 0 0 4px; background: linear-gradient(#d9a066, #8a5428 60%, #b37a45); }
+  .cell::after { content: ""; position: absolute; right: -5px; top: 9px; width: 5px; height: 8px; border-radius: 0 2px 2px 0; background: #bbb; }
+  .cell span { position: relative; }
+
+  /* switch panel */
+  .switch-grid { display: grid; grid-template-columns: repeat(4, 44px); gap: 18px; }
+  .toggle {
+    width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; position: relative;
+    background: radial-gradient(circle at 40% 35%, #f4f4f4, #a0a0a0 40%, #4a4a4a 68%, #1b1b1b 72%);
+  }
+  .toggle::after {
+    content: ""; position: absolute; left: 50%; top: 50%;
+    width: 10px; height: 25px; margin-left: -5px; border-radius: 5px;
+    background: linear-gradient(90deg, #7c7c7c, #fafafa 45%, #8d8d8d);
+    box-shadow: 0 2px 3px rgba(0,0,0,.6);
+    transform-origin: 50% 0; transform: rotate(0deg); transition: transform .12s ease-out;
+  }
+  .toggle[aria-pressed="true"]::after { transform: rotate(180deg); }
+  .toggle:focus-visible, .knob:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 3px;
+  }
+
+  /* LED perfboard */
+  .ledboard {
+    position: relative; padding: 22px 20px; border-radius: 3px;
+    background-color: #2c6a3d;
+    background-image: radial-gradient(circle, #c9a14e 0 1.6px, transparent 2.2px);
+    background-size: 10px 10px;
+    box-shadow: 0 6px 12px rgba(0,0,0,.4);
+  }
+  .led-grid { display: grid; grid-template-columns: repeat(4, 22px); gap: 12px; }
+  .led {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #b2463c, #5b1612 70%);
+    box-shadow: inset 0 -2px 3px rgba(0,0,0,.45);
+    transition: background .1s, box-shadow .1s;
+  }
+  .led.on {
+    background: radial-gradient(circle at 40% 35%, #fff 0 12%, #ff9a8a 30%, #ff2a1a 65%);
+    box-shadow: 0 0 10px 4px rgba(255,60,40,.7), 0 0 28px 10px rgba(255,40,20,.3);
+  }
+
+  /* knob panel */
+  .knob-grid { display: grid; grid-template-columns: repeat(4, 86px); gap: 4px 6px; }
+  .knob-cell { display: flex; flex-direction: column; align-items: center; }
+  .knob-cell.bias { grid-column: 2 / span 2; }
+  .knob { width: 86px; height: 86px; cursor: ns-resize; touch-action: none; border-radius: 50%; }
+  .knob svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .knob line { stroke: #f2efe8; stroke-width: 1.4; }
+  .knob text { fill: #f2efe8; font-size: 11px; font-weight: 700; text-anchor: middle; font-family: inherit; }
+  .knob-cap { transition: transform .05s linear; }
+  .knob-cell .cap-label { font-size: 10px; color: #8d877e; font-variant-numeric: tabular-nums; margin-top: -2px; }
+  .knob-cell.active .cap-label { color: var(--accent); }
+
+  /* resistors + meter */
+  .right-col { display: flex; flex-direction: column; gap: 18px; align-items: center; }
+  .resboard {
+    padding: 12px 14px; border-radius: 3px;
+    background-color: #161616;
+    background-image: radial-gradient(circle, #6f6a5d 0 1.2px, transparent 1.8px);
+    background-size: 8px 8px;
+    display: grid; grid-template-columns: repeat(17, 12px); gap: 2px;
+    box-shadow: 0 6px 12px rgba(0,0,0,.4);
+  }
+  .res {
+    width: 12px; height: 42px; border-radius: 5px; position: relative; opacity: .55; transition: opacity .15s;
+    background:
+      linear-gradient(transparent 0 30%, #e3c22b 30% 36%, transparent 36% 42%, #7b3fbf 42% 48%, transparent 48% 54%, #f08a24 54% 60%, transparent 60% 70%, #c9a24a 70% 76%, transparent 76%),
+      linear-gradient(90deg, #6f8fb6, #b4cbe6 45%, #6f8fb6);
+  }
+  .res.live { opacity: 1; }
+  .meter { width: 290px; max-width: 100%; }
+  .meter svg { width: 100%; display: block; }
+
+  /* ---------- controls ---------- */
+  .controls {
+    margin-top: 20px;
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .card {
+    background: rgba(18,14,10,.82);
+    border: 1px solid rgba(232,194,122,.18);
+    border-radius: 8px; padding: 16px;
+  }
+  .card h2 { margin: 0 0 12px; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+  .big { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .verdict { font-size: 1rem; margin: 4px 0 12px; }
+  .verdict.pos { color: var(--good); } .verdict.neg { color: var(--bad); }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .88rem; }
+  dt { color: var(--muted); } dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+  .hover { margin-top: 12px; min-height: 2.6em; font-size: .82rem; color: var(--muted); }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  button.b, select, input[type=number] {
+    font: inherit; font-size: .85rem; color: var(--ink);
+    background: #2a2119; border: 1px solid #5a4630; border-radius: 6px; padding: 7px 11px;
+  }
+  button.b { cursor: pointer; }
+  button.b:hover { background: #3a2d20; }
+  button.b.primary { background: #6b4b1f; border-color: #a77a36; }
+  button.b.primary:hover { background: #80592a; }
+  label.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .85rem; color: var(--muted); margin: 6px 0; }
+  input[type=number] { width: 96px; text-align: right; }
+  .msg { font-size: .85rem; color: var(--ink); min-height: 1.4em; margin-top: 6px; }
+  .note { font-size: .8rem; color: var(--muted); margin: 8px 0 0; line-height: 1.45; }
+
+  .gallery { display: flex; flex-wrap: wrap; gap: 10px; }
+  .ex {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    background: #1f1812; border: 1px solid #3c2f22; border-radius: 6px; padding: 6px 6px 4px; cursor: pointer;
+    color: var(--ink); font: inherit;
+  }
+  .ex.wrong { border-color: var(--bad); }
+  .ex.right { border-color: rgba(127,209,139,.6); }
+  .mini { display: grid; grid-template-columns: repeat(4, 8px); gap: 2px; }
+  .mini i { width: 8px; height: 8px; border-radius: 50%; background: #4a1a15; }
+  .mini i.on { background: #ff4a35; }
+  .ex .lab { font-size: .75rem; font-weight: 700; }
+  .ex .x { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 50%; border: 0; background: #5a4630; color: #fff; font-size: 11px; line-height: 18px; padding: 0; cursor: pointer; }
+  .empty { color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Perceptron Bench</h1>
+    <p>Click switches to set the inputs. Drag or scroll the knobs to set the weights (arrow keys work too, double-click resets to 0). The meter shows the summed current.</p>
+  </header>
+
+  <div class="board">
+    <div class="left-col">
+      <div class="batteries" aria-label="Two 1.5 volt cells in series, center tap is ground">
+        <div class="cell"><span>1.5 V</span></div>
+        <div class="cell"><span>1.5 V</span></div>
+      </div>
+      <div class="panel"><div class="switch-grid" id="switches"></div></div>
+    </div>
+
+    <div class="ledboard" aria-hidden="true"><div class="led-grid" id="leds"></div></div>
+
+    <div class="panel"><div class="knob-grid" id="knobs"></div></div>
+
+    <div class="right-col">
+      <div class="resboard" id="resistors" aria-hidden="true"></div>
+      <div class="meter" id="meter"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <section class="card">
+      <h2>Output</h2>
+      <div class="big" id="current">0.0 µA</div>
+      <div class="verdict" id="verdict">—</div>
+      <dl>
+        <dt>Ideal Σ wᵢxᵢ + b</dt><dd id="ideal">0</dd>
+        <dt>Summing-node voltage</dt><dd id="vnode">0 mV</dd>
+        <dt>Inputs switched on</dt><dd id="nOn">0</dd>
+        <dt>Battery drain (pots + LEDs)</dt><dd id="drain">0 mA</dd>
+      </dl>
+      <div class="hover" id="hover">Hover over a switch or knob to see its branch of the circuit.</div>
+    </section>
+
+    <section class="card">
+      <h2>Teach it</h2>
+      <div class="btns">
+        <button class="b" id="addPos">Add pattern as +</button>
+        <button class="b" id="addNeg">Add pattern as −</button>
+      </div>
+      <div class="btns">
+        <button class="b" id="epoch">Train 1 epoch</button>
+        <button class="b primary" id="auto">Train until correct</button>
+      </div>
+      <div class="btns">
+        <button class="b" id="zeroW">Zero knobs</button>
+        <button class="b" id="clearX">Clear switches</button>
+      </div>
+      <label class="row">Knob step per correction
+        <select id="step"><option>1</option><option>2</option><option selected>3</option><option>5</option></select>
+      </label>
+      <label class="row">Example set
+        <select id="preset">
+          <option value="diag">Diagonals: \ vs /</option>
+          <option value="vh">Vertical vs horizontal (can't be learned)</option>
+          <option value="none">Empty (draw your own)</option>
+        </select>
+      </label>
+      <div class="msg" id="msg"></div>
+      <p class="note">The learning rule is the one you'd follow by hand. If the needle points the wrong way, turn the knob of every switched-on input, plus the bias, one step toward the correct side.</p>
+    </section>
+
+    <section class="card">
+      <h2>Circuit values</h2>
+      <label class="row">Cell voltage (V) <input type="number" id="pV" step="0.1" min="0.5" value="1.5"></label>
+      <label class="row">Weight pots (kΩ, linear) <input type="number" id="pRp" step="1" min="0.5" value="10"></label>
+      <label class="row">Summing resistors (kΩ) <input type="number" id="pR" step="1" min="1" value="47"></label>
+      <label class="row">Meter resistance (Ω) <input type="number" id="pRm" step="100" min="0" value="1000"></label>
+      <label class="row">LED resistors (Ω) <input type="number" id="pRl" step="10" min="47" value="330"></label>
+      <p class="note">The ends of each pot go to +V and −V and the wiper gives −V…+V. When its switch is on, the wiper feeds the shared summing node through its own resistor. The meter runs from that node to the battery's center tap. A high meter resistance shrinks the needle swing but doesn't flip its sign.</p>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <h2>Training examples</h2>
+    <div class="gallery" id="gallery"></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const N = 16, BIAS = 16, WMAX = 30, DEG_PER_UNIT = 4.5;
+  const x = new Array(N).fill(false);
+  const w = new Array(N + 1).fill(0);
+  const P = { V: 1.5, Rp: 10e3, R: 47e3, Rm: 1000, Rl: 330, Vled: 1.8 };
+  let examples = [];
+
+  const $ = id => document.getElementById(id);
+  const clamp = v => Math.max(-WMAX, Math.min(WMAX, v));
+  const fmt = (v, d = 1) => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d);
+  const name = i => i === BIAS ? "Bias" : `Input ${i + 1} (row ${Math.floor(i / 4) + 1}, col ${i % 4 + 1})`;
+
+  // ---------- circuit model ----------
+  // Each pot sits across ±V. Wiper fraction a = (w+30)/60 gives V_i = V(2a−1)
+  // with Thevenin source resistance Rp·a·(1−a). Switched-on branches meet at a node
+  // that drains to ground (battery center tap) through the meter.
+  function physics() {
+    let G = P.Rm > 0 ? 1 / P.Rm : 1e9, num = 0;
+    const br = [];
+    for (let i = 0; i <= N; i++) {
+      const on = i === BIAS || x[i];
+      const a = (w[i] + WMAX) / (2 * WMAX);
+      const V = P.V * (2 * a - 1);
+      const g = on ? 1 / (P.Rp * a * (1 - a) + P.R) : 0;
+      G += g; num += V * g;
+      br.push({ on, V, g });
+    }
+    const Vn = num / G;
+    br.forEach(b => b.I = (b.V - Vn) * b.g);
+    const I = P.Rm > 0 ? Vn / P.Rm : br.reduce((s, b) => s + b.I, 0);
+    return { Vn, I, br };
+  }
+  const predict = () => physics().I > 0 ? 1 : -1;
+
+  // ---------- build the board ----------
+  document.querySelectorAll(".panel").forEach(p => {
+    for (let i = 0; i < 4; i++) p.prepend(Object.assign(document.createElement("span"), { className: "bolt" }));
+  });
+
+  const switches = [], leds = [], knobs = [], caps = [], capLabels = [], cells = [], resistors = [];
+  for (let i = 0; i < N; i++) {
+    const s = document.createElement("button");
+    s.className = "toggle";
+    s.setAttribute("aria-pressed", "false");
+    s.setAttribute("aria-label", `Switch ${i + 1}`);
+    s.addEventListener("click", () => { x[i] = !x[i]; update(); });
+    s.addEventListener("pointerenter", () => hoverIdx = i);
+    s.addEventListener("focus", () => hoverIdx = i);
+    $("switches").append(s); switches.push(s);
+
+    const l = document.createElement("div");
+    l.className = "led"; $("leds").append(l); leds.push(l);
+  }
+
+  function knobSVG() {
+    let s = '<svg viewBox="-62 -62 124 124" aria-hidden="true">';
+    s += '<circle r="41" fill="none" stroke="#f2efe8" stroke-width="1.6"/>';
+    for (let v = -WMAX; v <= WMAX; v += 2) {
+      const a = v * DEG_PER_UNIT * Math.PI / 180, r1 = v % 10 === 0 ? 33 : 36, r2 = 41;
+      s += `<line x1="${(r1 * Math.sin(a)).toFixed(2)}" y1="${(-r1 * Math.cos(a)).toFixed(2)}" x2="${(r2 * Math.sin(a)).toFixed(2)}" y2="${(-r2 * Math.cos(a)).toFixed(2)}"/>`;
+    }
+    for (const v of [-30, -10, 0, 10, 30]) {
+      const a = v * DEG_PER_UNIT * Math.PI / 180, r = 52;
+      s += `<text x="${(r * Math.sin(a)).toFixed(1)}" y="${(-r * Math.cos(a) + 4).toFixed(1)}">${v}</text>`;
+    }
+    s += '<g class="knob-cap"><circle r="29" fill="#0b0b0b" stroke="#2c2c2c" stroke-width="3" stroke-dasharray="2 2.5"/>';
+    s += '<circle r="24" fill="#151515"/><rect x="-5" y="-24" width="10" height="19" rx="5" fill="#f2efe8"/></g></svg>';
+    return s;
+  }
+
+  for (let i = 0; i <= N; i++) {
+    const cell = document.createElement("div");
+    cell.className = "knob-cell" + (i === BIAS ? " bias" : "");
+    const k = document.createElement("div");
+    k.className = "knob"; k.tabIndex = 0;
+    k.setAttribute("role", "slider");
+    k.setAttribute("aria-label", i === BIAS ? "Bias weight" : `Weight ${i + 1}`);
+    k.setAttribute("aria-valuemin", -WMAX); k.setAttribute("aria-valuemax", WMAX);
+    k.innerHTML = knobSVG();
+    const lab = document.createElement("div"); lab.className = "cap-label";
+    cell.append(k, lab); $("knobs").append(cell);
+    knobs.push(k); caps.push(k.querySelector(".knob-cap")); capLabels.push(lab); cells.push(cell);
+
+    const setW = v => { w[i] = clamp(Math.round(v)); update(); };
+    let drag = null;
+    k.addEventListener("pointerdown", e => { k.setPointerCapture(e.pointerId); drag = { y: e.clientY, w: w[i] }; k.focus(); });
+    k.addEventListener("pointermove", e => { if (drag) setW(drag.w + (drag.y - e.clientY) / 4); });
+    k.addEventListener("pointerup", () => drag = null);
+    k.addEventListener("pointercancel", () => drag = null);
+    k.addEventListener("dblclick", () => setW(0));
+    k.addEventListener("wheel", e => { e.preventDefault(); setW(w[i] + (e.deltaY < 0 ? 1 : -1)); }, { passive: false });
+    k.addEventListener("keydown", e => {
+      const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key];
+      if (d) { e.preventDefault(); setW(w[i] + d); }
+      else if (e.key === "Home") { e.preventDefault(); setW(-WMAX); }
+      else if (e.key === "End") { e.preventDefault(); setW(WMAX); }
+      else if (e.key === "0") setW(0);
+    });
+    k.addEventListener("pointerenter", () => hoverIdx = i);
+    k.addEventListener("focus", () => hoverIdx = i);
+
+    const r = document.createElement("div"); r.className = "res"; $("resistors").append(r); resistors.push(r);
+  }
+
+  // ---------- meter ----------
+  (function buildMeter() {
+    const cx = 150, cy = 232, R = 160;
+    const pt = (v, r) => { const a = v / 100 * 45 * Math.PI / 180; return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; };
+    let s = '<svg viewBox="0 0 300 300" role="img" aria-label="Center-zero microammeter">';
+    s += '<defs><clipPath id="win"><rect x="26" y="26" width="248" height="176" rx="6"/></clipPath>';
+    s += '<linearGradient id="case" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2a2a"/><stop offset="1" stop-color="#0a0a0a"/></linearGradient></defs>';
+    s += '<rect x="4" y="4" width="292" height="292" rx="18" fill="url(#case)"/>';
+    for (const dx of [-28, 0, 28]) s += `<rect x="${150 + dx - 7}" y="215" width="14" height="64" rx="5" fill="#1a1a1a" stroke="#000"/>`;
+    s += '<rect x="26" y="26" width="248" height="176" rx="6" fill="#efe9da"/>';
+    s += '<g clip-path="url(#win)">';
+    for (let v = -100; v <= 100; v += 5) {
+      const major = v % 50 === 0, mid = v % 25 === 0;
+      const [x1, y1] = pt(v, R - (major ? 14 : mid ? 10 : 6)), [x2, y2] = pt(v, R);
+      s += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#1d1d1d" stroke-width="${major ? 1.8 : 1}"/>`;
+    }
+    const [ax, ay] = pt(-100, R), [bx, by] = pt(100, R);
+    s += `<path d="M${ax.toFixed(1)} ${ay.toFixed(1)} A${R} ${R} 0 0 1 ${bx.toFixed(1)} ${by.toFixed(1)}" fill="none" stroke="#1d1d1d" stroke-width="1.4"/>`;
+    for (const v of [-100, -50, 0, 50, 100]) {
+      const [tx, ty] = pt(v, R - 30);
+      s += `<text x="${tx.toFixed(1)}" y="${(ty + 5).toFixed(1)}" text-anchor="middle" font-size="15" fill="#1d1d1d" font-family="Georgia, serif">${Math.abs(v)}</text>`;
+    }
+    s += '<text x="150" y="168" text-anchor="middle" font-size="15" letter-spacing="1" fill="#1d1d1d" font-family="Georgia, serif">MICROAMPERES</text>';
+    s += '<text x="150" y="184" text-anchor="middle" font-size="9" fill="#1d1d1d" font-family="Georgia, serif">D.C.</text>';
+    s += `<g id="needle"><line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - R - 4}" stroke="#111" stroke-width="2"/></g>`;
+    s += '</g>';
+    s += '<circle cx="150" cy="248" r="9" fill="#0f0f0f" stroke="#333"/><line x1="143" y1="248" x2="157" y2="248" stroke="#444" stroke-width="2"/>';
+    s += '</svg>';
+    $("meter").innerHTML = s;
+  })();
+  const needle = document.getElementById("needle");
+  let needleTarget = 0, needlePos = 0, needleVel = 0;
+  (function animate() {
+    needleVel += (needleTarget - needlePos) * 0.07;
+    needleVel *= 0.8;
+    needlePos += needleVel;
+    needle.setAttribute("transform", `rotate(${(needlePos / 100 * 45).toFixed(2)} 150 232)`);
+    requestAnimationFrame(animate);
+  })();
+
+  // ---------- render ----------
+  let hoverIdx = null;
+  function update() {
+    const ph = physics(), uA = ph.I * 1e6;
+    needleTarget = Math.max(-108, Math.min(108, uA));
+    let nOn = 0;
+    for (let i = 0; i < N; i++) {
+      switches[i].setAttribute("aria-pressed", x[i]);
+      leds[i].classList.toggle("on", x[i]);
+      if (x[i]) nOn++;
+    }
+    for (let i = 0; i <= N; i++) {
+      caps[i].setAttribute("transform", `rotate(${w[i] * DEG_PER_UNIT})`);
+      knobs[i].setAttribute("aria-valuenow", w[i]);
+      capLabels[i].textContent = (i === BIAS ? "bias " : `w${i + 1} `) + (w[i] > 0 ? "+" : "") + w[i];
+      const live = i === BIAS || x[i];
+      cells[i].classList.toggle("active", live);
+      resistors[i].classList.toggle("live", live && w[i] !== 0);
+    }
+    $("current").textContent = `${fmt(uA)} µA` + (Math.abs(uA) > 100 ? " (pinned)" : "");
+    const v = $("verdict");
+    v.textContent = uA > 0 ? "Class +  (needle right)" : uA < 0 ? "Class −  (needle left)" : "Undecided (needle at zero)";
+    v.className = "verdict " + (uA > 0 ? "pos" : uA < 0 ? "neg" : "");
+    $("ideal").textContent = w.reduce((s, wi, i) => s + (i === BIAS || x[i] ? wi : 0), 0) + " knob units";
+    $("vnode").textContent = `${fmt(ph.Vn * 1000)} mV`;
+    $("nOn").textContent = nOn;
+    const drain = 17 * (2 * P.V) / P.Rp + nOn * Math.max(0, 2 * P.V - P.Vled) / P.Rl;
+    $("drain").textContent = `≈ ${(drain * 1000).toFixed(1)} mA`;
+    renderHover(ph);
+    renderGallery();
+  }
+
+  function renderHover(ph) {
+    if (hoverIdx === null) return;
+    const i = hoverIdx, b = ph.br[i];
+    const state = i === BIAS ? "always connected" : x[i] ? "switch ON" : "switch OFF (branch open)";
+    $("hover").textContent = `${name(i)}: ${state} · knob ${w[i] > 0 ? "+" : ""}${w[i]} → wiper ${fmt(b.V, 2)} V · branch current ${fmt(b.I * 1e6)} µA`;
+  }
+  document.addEventListener("pointermove", () => { if (hoverIdx !== null) renderHover(physics()); });
+
+  // ---------- training ----------
+  const pat = s => s.replace(/\s/g, "").split("").map(c => c === "1");
+  const PRESETS = {
+    diag: [
+      ["1000 0100 0010 0001", 1], ["0100 0010 0001 0000", 1], ["0000 1000 0100 0010", 1],
+      ["0001 0010 0100 1000", -1], ["0010 0100 1000 0000", -1], ["0000 0001 0010 0100", -1],
+    ],
+    vh: [
+      ["1000 1000 1000 1000", 1], ["0100 0100 0100 0100", 1], ["0010 0010 0010 0010", 1], ["0001 0001 0001 0001", 1],
+      ["1111 0000 0000 0000", -1], ["0000 1111 0000 0000", -1], ["0000 0000 1111 0000", -1], ["0000 0000 0000 1111", -1],
+    ],
+    none: [],
+  };
+  function loadPreset(key) {
+    examples = PRESETS[key].map(([s, label]) => ({ x: pat(s), label }));
+    $("msg").textContent = key === "vh"
+      ? "Try it: no setting of the knobs separates these. Every pixel is in exactly one vertical bar and one horizontal bar, so both groups add up the same weights."
+      : "";
+    update();
+  }
+
+  function stepOn(ex) {
+    for (let i = 0; i < N; i++) x[i] = ex.x[i];
+    if (predict() === ex.label) return false;
+    const d = +$("step").value * ex.label;
+    for (let i = 0; i < N; i++) if (x[i]) w[i] = clamp(w[i] + d);
+    w[BIAS] = clamp(w[BIAS] + d);
+    return true;
+  }
+  const mistakes = () => examples.filter(ex => { const save = x.slice(); ex.x.forEach((v, i) => x[i] = v); const wrong = predict() !== ex.label; save.forEach((v, i) => x[i] = v); return wrong; }).length;
+
+  let runToken = 0;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function runEpochs(maxEpochs, delay) {
+    if (!examples.length) { $("msg").textContent = "Add some examples first."; return; }
+    const token = ++runToken;
+    $("auto").textContent = "Stop";
+    for (let e = 1; e <= maxEpochs; e++) {
+      let fixes = 0;
+      for (const ex of examples) {
+        if (token !== runToken) return;
+        if (stepOn(ex)) fixes++;
+        update();
+        await sleep(delay);
+      }
+      const wrong = mistakes();
+      $("msg").textContent = `Epoch ${e}: made ${fixes} correction${fixes === 1 ? "" : "s"}, now ${wrong} of ${examples.length} wrong.`;
+      if (wrong === 0) { $("msg").textContent += " All examples correct."; break; }
+      if (e === maxEpochs && maxEpochs > 1) $("msg").textContent += " Gave up. This set may not be linearly separable.";
+    }
+    if (token === runToken) { runToken++; $("auto").textContent = "Train until correct"; }
+  }
+  $("epoch").addEventListener("click", () => runEpochs(1, 260));
+  $("auto").addEventListener("click", () => {
+    if ($("auto").textContent === "Stop") { runToken++; $("auto").textContent = "Train until correct"; return; }
+    runEpochs(40, 140);
+  });
+  $("addPos").addEventListener("click", () => { examples.push({ x: x.slice(), label: 1 }); update(); });
+  $("addNeg").addEventListener("click", () => { examples.push({ x: x.slice(), label: -1 }); update(); });
+  $("zeroW").addEventListener("click", () => { w.fill(0); update(); });
+  $("clearX").addEventListener("click", () => { x.fill(false); update(); });
+  $("preset").addEventListener("change", e => loadPreset(e.target.value));
+
+  function renderGallery() {
+    const g = $("gallery");
+    g.textContent = "";
+    if (!examples.length) {
+      g.innerHTML = '<span class="empty">No examples yet. Set the switches, then click “Add pattern as +” or “Add pattern as −”.</span>';
+      return;
+    }
+    const save = x.slice();
+    examples.forEach((ex, k) => {
+      ex.x.forEach((v, i) => x[i] = v);
+      const ok = predict() === ex.label;
+      const b = document.createElement("div");
+      b.className = "ex " + (ok ? "right" : "wrong");
+      b.tabIndex = 0; b.setAttribute("role", "button");
+      b.title = "Load onto the switches";
+      b.innerHTML = '<div class="mini">' + ex.x.map(v => `<i class="${v ? "on" : ""}"></i>`).join("") + "</div>"
+        + `<span class="lab" style="color:${ex.label > 0 ? "var(--good)" : "var(--bad)"}">${ex.label > 0 ? "+" : "−"} ${ok ? "✓" : "✗"}</span>`;
+      const del = document.createElement("button");
+      del.className = "x"; del.textContent = "×"; del.setAttribute("aria-label", "Remove example");
+      del.addEventListener("click", e => { e.stopPropagation(); examples.splice(k, 1); update(); });
+      b.append(del);
+      const load = () => { ex.x.forEach((v, i) => x[i] = v); update(); };
+      b.addEventListener("click", load);
+      b.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); load(); } });
+      g.append(b);
+    });
+    save.forEach((v, i) => x[i] = v);
+  }
+
+  // ---------- circuit parameter inputs ----------
+  const bindParam = (id, key, scale) => $(id).addEventListener("input", e => {
+    const v = parseFloat(e.target.value);
+    if (Number.isFinite(v) && v >= 0) { P[key] = v * scale; update(); }
+  });
+  bindParam("pV", "V", 1); bindParam("pRp", "Rp", 1e3); bindParam("pR", "R", 1e3);
+  bindParam("pRm", "Rm", 1); bindParam("pRl", "Rl", 1);
+
+  loadPreset("diag");
+})();
+</script>
+</body>
+</html>
