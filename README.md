@@ -21,9 +21,7 @@ there and flow through the meter to ground, so the needle shows Σ wᵢxᵢ + b.
 
 ## Credits
 
-Inspired by a hand-built analog perceptron with switches, pots and a microammeter.
-<!-- Add a link to the original build/video here. -->
-
+Heavily inspired by a hand-built analog perceptron with switches, pots and a microammeter found in [Welch Labs: Illustrated Guide to AI](https://www.welchlabs.com/store/illustrated-guide-to-ai)
 ## License
 
 [MIT](LICENSE)
