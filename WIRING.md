@@ -4,7 +4,7 @@ A 16-input perceptron with a bias, built from passive parts: two AA cells, 16 to
 16 LEDs, 17 potentiometers, 17 resistors and a center-zero microammeter. No chip or code is involved.
 The circuit adds up the weighted inputs as currents, and the meter needle shows the sign of the total.
 
-`perceptron.html` simulates exactly this circuit. You can change the part values there before you buy anything.
+`index.html` simulates exactly this circuit. You can change the part values there before you buy anything.
 
 ## Big picture
 

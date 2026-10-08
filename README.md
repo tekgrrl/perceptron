@@ -1,4 +1,5 @@
 # Perceptron Bench
+**[Try the simulator →](https://tekgrrl.github.io/perceptron/perceptron.html)**
 
 A 16-input perceptron built from analog parts: toggle switches for the pixels, potentiometers for the
 weights, and a center-zero microammeter as the output. No chips and no code. This repo has a browser
@@ -6,7 +7,7 @@ simulator of the circuit and a guide to wiring the real thing.
 
 ## What's here
 
-- **`perceptron.html`** is an interactive simulator. Open it in any browser; it doesn't need a build step or a server.
+- **`index.html`** is an interactive simulator. Open it in any browser; it doesn't need a build step or a server.
   - Flip switches to draw a 4×4 image and turn the 17 knobs (16 weights + bias, −30 to +30).
   - The meter shows the current the real circuit would produce, worked out from actual part values
     (cell voltage, pot and resistor values, meter resistance). You can change those values in the page.
