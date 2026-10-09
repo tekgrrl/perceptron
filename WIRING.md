@@ -79,7 +79,11 @@ The 17th pot is wired the same way but has **no switch**. Its wiper always conne
 same fraction off every branch, so the needle swings less. It **doesn't change the sign**, and the sign
 is all the perceptron uses. Change "Meter resistance" in the simulator to see this.
 
-## Full schematic (2 of 16 inputs shown)
+## Full schematic
+
+![Full schematic: battery and power switch, 16 weight channels plus the bias, the summing node and meter, and the LED pole of each switch](schematic.svg)
+
+Every channel is identical, so the same circuit squeezed into text, with 2 of the 16 inputs shown:
 
 ```
    +1.5 V ──────────┬──────────────┬──────────────┐
@@ -129,10 +133,10 @@ Print or engrave a dial scale from −30 to +30 for each pot. The simulator's kn
 ## Training it by hand (perceptron learning rule)
 
 1. Set an example image on the switches and decide what its label should be (+ or −).
-2. If the needle points the right way, do nothing.
-3. If it points the wrong way, turn **every knob whose switch is on, plus the bias**, one step
-   (e.g. 3 units) toward the correct side.
-4. Go through all your examples over and over until every one comes out right.
+2. If the needle points the right way and swings at least the minimum (e.g. 10 µA), do nothing.
+3. Otherwise turn **every knob whose switch is on, plus the bias**, one step (e.g. 5 units) toward the
+   correct side.
+4. Go through all your examples, in passes, until a whole pass needs no corrections.
 
 The simulator's "Train 1 pass" button does exactly this, so you can practise before building.
 It also includes an example set (vertical vs horizontal bars) that **no setting of the knobs can learn**.

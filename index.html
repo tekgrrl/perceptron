@@ -198,7 +198,21 @@
   .mini i.on { background: #ff4a35; }
   .ex .lab { font-size: .75rem; font-weight: 700; }
   .ex .x { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 50%; border: 0; background: #5a4630; color: #fff; font-size: 11px; line-height: 18px; padding: 0; cursor: pointer; }
+  .ex .mv { font: inherit; font-size: .65rem; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+  .ex .mv:hover { color: var(--accent); }
   .empty { color: var(--muted); font-size: .85rem; }
+  dialog.confirm {
+    max-width: min(420px, calc(100vw - 32px)); padding: 20px; border-radius: 8px;
+    border: 1px solid #a77a36; background: #1f1812; color: var(--ink);
+  }
+  dialog.confirm::backdrop { background: rgba(0,0,0,.55); }
+  dialog.confirm p { margin: 0 0 16px; line-height: 1.45; }
+  dialog.confirm .btns { justify-content: flex-end; margin: 0; }
+  .card h2 .count { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; }
+  .card h2.gap { margin-top: 20px; }
+  .score { font-size: .85rem; margin: -4px 0 10px; color: var(--muted); }
+  .score b { color: var(--ink); }
+  .score.all b { color: var(--good); }
 </style>
 </head>
 <body>
@@ -248,9 +262,13 @@
         <button class="b" id="addPos">Add pattern as +</button>
         <button class="b" id="addNeg">Add pattern as −</button>
       </div>
+      <label class="row">Add to
+        <select id="addTo"><option value="train">Training set</option><option value="test">Test set (never trained on)</option></select>
+      </label>
       <label class="row">Example set
         <select id="preset">
           <option value="diag">Diagonals: \ vs /</option>
+          <option value="tjnoise">T vs J with noise (with test set)</option>
           <option value="vh">Vertical vs horizontal (can't be learned)</option>
           <option value="none">Empty (draw your own)</option>
         </select>
@@ -287,10 +305,21 @@
   </div>
 
   <section class="card" style="margin-top:16px">
-    <h2>Training examples</h2>
+    <h2>Training examples <span class="count" id="trainCount"></span></h2>
     <div class="gallery" id="gallery"></div>
+    <h2 class="gap">Test examples <span class="count" id="testCount"></span></h2>
+    <p class="score" id="testScore">Never used for training. Each is checked with the current knob settings.</p>
+    <div class="gallery" id="testGallery"></div>
   </section>
 </main>
+
+<dialog class="confirm" id="confirm" aria-labelledby="confirmText">
+  <p id="confirmText"></p>
+  <div class="btns">
+    <button type="button" class="b" id="confirmCancel">Cancel</button>
+    <button type="button" class="b primary" id="confirmOk">Reset knobs</button>
+  </div>
+</dialog>
 
 <script>
 (() => {
@@ -501,16 +530,37 @@
       ["1000 1000 1000 1000", 1], ["0100 0100 0100 0100", 1], ["0010 0010 0010 0010", 1], ["0001 0001 0001 0001", 1],
       ["1111 0000 0000 0000", -1], ["0000 1111 0000 0000", -1], ["0000 0000 1111 0000", -1], ["0000 0000 0000 1111", -1],
     ],
+    tjnoise: tjNoise,
     none: [],
   };
+  const PRESET_NOTES = {
+    vh: "Try it: no setting of the knobs separates these. Every pixel is in exactly one vertical bar and one horizontal bar, so both groups add up the same weights.",
+    tjnoise: "12 training letters: each T and J clean, plus one copy with a pixel missing and one with a stray pixel. The 56 test letters have one other pixel flipped. Train, then check the test score.",
+  };
+
+  // T (+) and J (−) at two positions, with single-pixel noise. Each letter trains on its clean form plus
+  // two noisy copies (pixels numbered 1–16, left to right, top to bottom); every other one-pixel flip is a test example.
+  function tjNoise() {
+    const letters = [["1110 0100 0100 0100", 1], ["0111 0010 0010 0010", 1], ["0010 0010 1010 1110", -1], ["0001 0001 0101 0111", -1]];
+    const trainFlips = [[2, 5], [2, 9], [11, 5], [15, 9]];
+    const flipped = (s, p) => { const y = pat(s); y[p - 1] = !y[p - 1]; return y; };
+    const train = letters.map(([s, label]) => ({ x: pat(s), label, test: false }));
+    letters.forEach(([s, label], k) => trainFlips[k].forEach(p => train.push({ x: flipped(s, p), label, test: false })));
+    const test = [];
+    letters.forEach(([s, label], k) => {
+      for (let p = 1; p <= N; p++) if (!trainFlips[k].includes(p)) test.push({ x: flipped(s, p), label, test: true });
+    });
+    return train.concat(test);
+  }
+  const trainSet = () => examples.filter(ex => !ex.test);
+
   // Running pass count, so repeated "Train 1 pass" clicks count up. Restarts when the knobs or examples are reset.
   let passes = 0;
   function loadPreset(key) {
     w.fill(0); passes = 0;
-    examples = PRESETS[key].map(([s, label]) => ({ x: pat(s), label }));
-    $("msg").textContent = key === "vh"
-      ? "Try it: no setting of the knobs separates these. Every pixel is in exactly one vertical bar and one horizontal bar, so both groups add up the same weights."
-      : "";
+    const src = PRESETS[key];
+    examples = typeof src === "function" ? src() : src.map(([s, label]) => ({ x: pat(s), label, test: false }));
+    $("msg").textContent = PRESET_NOTES[key] || "";
     update();
   }
 
@@ -522,25 +572,26 @@
     w[BIAS] = clamp(w[BIAS] + d);
     return true;
   }
-  const mistakes = () => examples.filter(ex => { const save = x.slice(); ex.x.forEach((v, i) => x[i] = v); const wrong = !meets(ex.label); save.forEach((v, i) => x[i] = v); return wrong; }).length;
+  const mistakes = () => trainSet().filter(ex => { const save = x.slice(); ex.x.forEach((v, i) => x[i] = v); const wrong = !meets(ex.label); save.forEach((v, i) => x[i] = v); return wrong; }).length;
 
   let runToken = 0;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   async function runEpochs(maxEpochs, delay) {
-    if (!examples.length) { $("msg").textContent = "Add some examples first."; return; }
+    const set = trainSet();
+    if (!set.length) { $("msg").textContent = "Add some training examples first."; return; }
     const token = ++runToken;
     $("auto").textContent = "Stop";
     for (let e = 1; e <= maxEpochs; e++) {
       let fixes = 0;
       passes++;
-      for (const ex of examples) {
+      for (const ex of set) {
         if (token !== runToken) return;
         if (stepOn(ex)) fixes++;
         update();
         await sleep(delay);
       }
       const wrong = mistakes();
-      const n = examples.length, m = minSwing();
+      const n = set.length, m = minSwing();
       const target = m > 0 ? `clear the ${m} µA minimum` : "point the right way";
       const did = fixes ? `corrected ${fixes} example${fixes === 1 ? "" : "s"}` : "nothing to correct";
       if (wrong === 0) { $("msg").textContent = `Pass ${passes}: ${did}. All ${n} ${fixes ? "now" : "already"} ${target}. Done.`; break; }
@@ -554,43 +605,94 @@
     if ($("auto").textContent === "Stop") { runToken++; $("auto").textContent = "Train until correct"; return; }
     runEpochs(40, 140);
   });
-  $("addPos").addEventListener("click", () => { examples.push({ x: x.slice(), label: 1 }); passes = 0; update(); });
-  $("addNeg").addEventListener("click", () => { examples.push({ x: x.slice(), label: -1 }); passes = 0; update(); });
-  $("zeroW").addEventListener("click", () => { w.fill(0); passes = 0; update(); });
+  const addExample = label => {
+    const test = $("addTo").value === "test";
+    examples.push({ x: x.slice(), label, test });
+    if (!test) passes = 0;
+    update();
+  };
+  $("addPos").addEventListener("click", () => addExample(1));
+  $("addNeg").addEventListener("click", () => addExample(-1));
+  // Ask before anything that resets the knobs, but only when there's something to lose.
+  let pendingReset = null;
+  function confirmKnobReset(action, onYes, onNo = () => {}) {
+    const set = w.filter(v => v !== 0).length;
+    if (!set) { onYes(); return; }
+    $("confirmText").textContent = `${action} resets all knobs to 0. ${set} knob${set === 1 ? " is" : "s are"} set at the moment, including any training you've done.`;
+    pendingReset = { onYes, onNo };
+    $("confirm").showModal();
+    $("confirmOk").focus();
+  }
+  function settleReset(ok) {
+    const p = pendingReset;
+    pendingReset = null;
+    $("confirm").close();
+    if (p) (ok ? p.onYes : p.onNo)();
+  }
+  $("confirmOk").addEventListener("click", () => settleReset(true));
+  $("confirmCancel").addEventListener("click", () => settleReset(false));
+  $("confirm").addEventListener("cancel", e => { e.preventDefault(); settleReset(false); });
+  $("zeroW").addEventListener("click", () => confirmKnobReset("Zero knobs", () => { w.fill(0); passes = 0; update(); }));
   $("clearX").addEventListener("click", () => { x.fill(false); update(); });
-  $("preset").addEventListener("change", e => loadPreset(e.target.value));
+  let presetShown = $("preset").value;
+  $("preset").addEventListener("change", e => {
+    const key = e.target.value;
+    confirmKnobReset("Loading a new example set",
+      () => { presetShown = key; loadPreset(key); },
+      () => { e.target.value = presetShown; });
+  });
   const showAuto = () => { $("margin").options[0].textContent = `Auto: 2 × step = ${2 * +$("step").value} µA`; };
   $("margin").addEventListener("change", update);
   $("step").addEventListener("change", () => { showAuto(); update(); });
   showAuto();
 
   function renderGallery() {
-    const g = $("gallery");
-    g.textContent = "";
-    if (!examples.length) {
-      g.innerHTML = '<span class="empty">No examples yet. Set the switches, then click “Add pattern as +” or “Add pattern as −”.</span>';
-      return;
-    }
+    const train = trainSet(), test = examples.filter(ex => ex.test);
+    $("trainCount").textContent = `(${train.length})`;
+    $("testCount").textContent = `(${test.length})`;
     const save = x.slice();
-    examples.forEach((ex, k) => {
+    fillStrip($("gallery"), train, false,
+      "No training examples yet. Set the switches, then click “Add pattern as +” or “Add pattern as −”.");
+    const right = fillStrip($("testGallery"), test, true,
+      "No test examples. Set “Add to” to Test set before adding a pattern, or click “to test” under a training example.");
+    save.forEach((v, i) => x[i] = v);
+    const sc = $("testScore");
+    sc.className = "score" + (test.length && right === test.length ? " all" : "");
+    sc.innerHTML = test.length
+      ? `Never used for training. <b>${right} of ${test.length}</b> on the correct side with the current knobs.`
+      : "Never used for training. Each is checked with the current knob settings.";
+  }
+
+  // Training examples are marked ✓ when they clear the minimum swing; test examples when the needle
+  // is on the correct side at all. Returns how many are marked ✓.
+  function fillStrip(g, list, isTest, emptyMsg) {
+    g.textContent = "";
+    if (!list.length) { g.innerHTML = `<span class="empty">${emptyMsg}</span>`; return 0; }
+    let right = 0;
+    for (const ex of list) {
       ex.x.forEach((v, i) => x[i] = v);
-      const ok = meets(ex.label);
+      const ok = isTest ? physics().I * ex.label > 0 : meets(ex.label);
+      if (ok) right++;
       const b = document.createElement("div");
       b.className = "ex " + (ok ? "right" : "wrong");
       b.tabIndex = 0; b.setAttribute("role", "button");
       b.title = "Load onto the switches";
       b.innerHTML = '<div class="mini">' + ex.x.map(v => `<i class="${v ? "on" : ""}"></i>`).join("") + "</div>"
         + `<span class="lab" style="color:${ex.label > 0 ? "var(--good)" : "var(--bad)"}">${ex.label > 0 ? "+" : "−"} ${ok ? "✓" : "✗"}</span>`;
+      const mv = document.createElement("button");
+      mv.className = "mv"; mv.textContent = isTest ? "to training" : "to test";
+      mv.setAttribute("aria-label", isTest ? "Move to training set" : "Move to test set");
+      mv.addEventListener("click", e => { e.stopPropagation(); ex.test = !ex.test; passes = 0; update(); });
       const del = document.createElement("button");
       del.className = "x"; del.textContent = "×"; del.setAttribute("aria-label", "Remove example");
-      del.addEventListener("click", e => { e.stopPropagation(); examples.splice(k, 1); passes = 0; update(); });
-      b.append(del);
+      del.addEventListener("click", e => { e.stopPropagation(); examples.splice(examples.indexOf(ex), 1); if (!isTest) passes = 0; update(); });
+      b.append(mv, del);
       const load = () => { ex.x.forEach((v, i) => x[i] = v); update(); };
       b.addEventListener("click", load);
-      b.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); load(); } });
+      b.addEventListener("keydown", e => { if (e.target === b && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); load(); } });
       g.append(b);
-    });
-    save.forEach((v, i) => x[i] = v);
+    }
+    return right;
   }
 
   // ---------- circuit parameter inputs ----------
